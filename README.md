@@ -11,10 +11,31 @@ https://stackoverflow.com/questions/23284473/fatal-error-eigen-dense-no-such-fil
 
 https://stackoverflow.com/questions/54971083/how-to-use-cvmat-and-eigenmatrix-correctly-opencv-eigen
 
-
-## 1.Install Xcode
-## 2. Install Homebrew
-## 3. Install OpenCV
-'
+## Initial setup
+### 1.Install Xcode
+### 2. Install Homebrew
+### 3. Install OpenCV
+```
 brew install opencv
-## 4. Install pkg-config
+```
+### 4. Install pkg-config
+
+## How to Run
+### parameters
+-l <path for left image>
+-r <path for right image>
+-i <path for a combined image>
+-T : generate true analygrph
+-G : generate gray analygrph
+-C : generate color analygrph
+-H : generate half-color analygrph
+-O : generate 3DTV-optimized analygrph
+-D : generate DuBois analygrph
+-R : generate Roscolux analygrph
+
+```
+make
+./main -<function selection>  -i <path for a combined image> 
+./main -<function selection> -l <path for left image> -r <path for right image>
+```
+An "analygraph.jpeg" file will be generated under the same directory of main
