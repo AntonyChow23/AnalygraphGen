@@ -1,6 +1,13 @@
+#include <Eigen/Dense>
+#include <eigen3/Eigen/Dense>
+
 #include <opencv2/core.hpp>
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/highgui.hpp>
+#include <opencv2/core/eigen.hpp>
+#include "opencv2/core/core.hpp"
+#include "opencv2/highgui/highgui.hpp"
+#include "opencv2/imgproc/imgproc.hpp"
 
 #include "analygen.h"
 
@@ -11,27 +18,138 @@
 #include <unistd.h>
 #include <cstring>
 #include <cstdint>
-#include <eigen3/Eigen/Dense>
+
 
 using namespace std;
 using namespace cv;
 using namespace Eigen;
 
-Mat analy_gen(Mat left, Mat right, Matrix3f M_l, Matrix3f M_r)
+#define DIM 3
+#define MAX_THREAD 4
+double Ml[DIM][DIM];
+double Mr[DIM][DIM];
+
+
+Mat analy_gen(const Mat &left_graph, const Mat &right_graph, Matrix3f M_l, Matrix3f M_r)
 {
     //Mat analygraph = 0.5*left + 0.5*right;
-    Mat left_channels[3];
-    Mat right_channels[3];
-    //left *= 1. / 255;
-    split(left, left_channels);
-    split(right, right_channels);
+    //typedef Matrix<double, Dynamic, Dynamic> MatrixXd;
+    typedef Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> MatrixXd;
+    MatrixXd left_RGB, right_RGB, analy_RGB, A, B;
+    //typedef Matrix<double, 3, Dynamic> Eigen::Matrix3Xd
+    //Matrix3Xd left_RGB, right_RGB, analy_RGB, A, B;
 
-    Mat analygraph;
+    Mat left, right, analy_graph;
+    //MatrixXf mat(Dynamic, Dynamic);
+
+    //Matrix<double, 3, Dynamic> analy_RGB;
+    //Matrix<double, 3, Dynamic> left_RGB;
+   // Matrix<double, 3, Dynamic> right_RGB;
+    //int Row = min(right_graph.size().width, left_graph.size().width);
+    //int Col = min(right_graph.size().height, left_graph.size().height);
+
+    cout << "left: " << left_graph.size() << " " << left_graph.channels() << endl;
+    cout << "right: " << right_graph.size() << " " << right_graph.channels() << endl;
+
+    int Row = min(right_graph.rows, left_graph.rows);
+    int Col = min(right_graph.cols, left_graph.cols);
+
+    cout << "Row:" << Row << " " << "Col:" << Col << endl;
+
+    left = left_graph(Range(0, Row), Range(0, Col));
+    right = right_graph(Range(0, Row), Range(0, Col));
+
+    int n_channels = min(left.channels(), right.channels()); // assume two pictures have same channels
+
+    cout << "left: " << left.size() << " " << left.channels() << endl;
+    Mat img = left.reshape(1,0);
+    cout << "img: " << img.size() << " " << img.channels() << endl;
+
+    cv2eigen(img, left_RGB);
+    //left_RGB.resize(3, 0); // assume 3 channels
+    left_RGB.resize(3, left_RGB.cols() * left_RGB.rows() / 3); // assume 3 channels
+
+    cout << "left_RGB: " << left_RGB.rows() << " " << left_RGB.cols() << endl;
+
+    cout << "right: " << right.size() << " " << right.channels() << endl;
+    img = right.reshape(1,0);
+    cout << "img: " << img.size() << " " << img.channels() << endl;
+    cv2eigen(img, right_RGB);
+    //right_RGB.resize(3, 0); // assume 3 channels
+    right_RGB.resize(3, right_RGB.cols() * right_RGB.rows() / 3); // assume 3 channels
+
+    A = M_l * left_RGB;
+    B = M_r * right_RGB;
+    cout << "A: " << A.rows() << " " << A.cols() << endl;
+    cout << "B: " << B.rows() << " " << B.cols() << endl;
+
+    //imshow("A", eigen2cv(A));
+    // imshow("left", left_channels[0]);
+    // imshow("right", right);
+
+    // waitKey(0);
+    // destroyAllWindows();
+    // cv2eigen(left_channels, left_RGB);
+
+    analy_RGB = A;
+    //analy_RGB = A + B;
+    cout << "analy_RGB: " << analy_RGB.rows() << " " << analy_RGB.cols() << endl;
+    //analy_RGB.resize(3, analy_RGB.cols() * analy_RGB.rows() / 3);
+    eigen2cv(analy_RGB, analy_graph);
+    cout << "analy_graph: " << analy_graph.size() << " " << analy_graph.channels() << endl;
+    //analy_graph = analy_graph.reshape(Row, Col);
+    analy_graph = analy_graph.reshape(n_channels, 0);
+    cout << "analy_graph: " << analy_graph.size() << " " << analy_graph.channels() << endl;
+
+    //analy_graph = analy_graph.reshape(n_channels, 0);
+    //cout << left.size().width << " " << left.size().height << endl;
+    //Mat left_channels[3];
+    // Mat right_channels[3];
+    //split(left, left_channels);
+
+    //cv2eigen(left, left_RGB);
+    //cout << left_channels[0].size().width << " " << left_channels[0].size().height << endl;
+    //cv2eigen(left_channels[0], left_RGB.row(0));
+    //cv2eigen(left_channels, left_RGB);
+    //left_RGB.row(0) = left_channels[0];
+    //left_RGB.row(1) = left_channels[1];
+    //left_RGB.row(2) = left_channels[2];
+    // split(right, right_channels);
+
+
+
+    //imshow("graph", analy_graph);
+    //imshow("left", left_channels[0]);
+    //imshow("right", right);
+
+    //waitKey(0);
+    //destroyAllWindows();
+    //cv2eigen(left_channels, left_RGB);
+    /*
+    cv2eigen(right, right_RGB);
+
+    cout << left_RGB.rows() << " " << left_RGB.cols() << endl;
+    cout << right_RGB.rows() << " " << right_RGB.cols() << endl;
+
+    analy_RGB = M_l * left_RGB + M_r * right_RGB;
+
+    
+    eigen2cv(analy_RGB, analygraph);
+
+    //Mat left_channels[3];
+    //Mat right_channels[3];
+    //split(left, left_channels);
+    //split(right, right_channels);
+    //analy_RGB.row() =
+
+    //image.at<Vec3b>(j, i)[0];
+   // Mat analygraph;
     //Mat analygraph = {left_channels[0], left_channels[1], left_channels[2]};
-    merge(left_channels, 3, analygraph);
+    //merge(left_channels, 3, analygraph);
 
     // cout << (left)
-    return analygraph;
+    */
+    return analy_graph;
 }
 
 //! [includes]
@@ -46,10 +164,6 @@ int main(int argc, char **argv)
     Matrix3f M_l = Matrix3f::Zero();
     Matrix3f M_r = Matrix3f::Zero();
 
-    //regex_t regexNames;
-
-    AnalyGen gen;
-
     while ((opt = getopt(argc, argv, "l:r:i:o:TGCHODR")) != -1)
     {
         switch (opt)
@@ -57,21 +171,40 @@ int main(int argc, char **argv)
             case 'l':
                 image_path = (char *)malloc(strlen(optarg) + 1);
                 memcpy(image_path, optarg, strlen(optarg) + 1);
-                cout << image_path << endl;
-                left = imread(image_path);
+                //cout << image_path << endl;
+                left = imread(image_path, IMREAD_COLOR);
+                if (!left.data)
+                {
+                    cout << "Error loading image." << endl;
+                    return -1;
+                }
+                cvtColor(left, left, COLOR_BGR2RGB);
                 //left = imread(image_path, IMREAD_COLOR);
                 break;
             case 'r' :
                 image_path = (char *)malloc(strlen(optarg) + 1);
                 memcpy(image_path, optarg, strlen(optarg) + 1);
-                cout << image_path << endl;
+                //cout << image_path << endl;
                 right = imread(image_path, IMREAD_COLOR);
+                if (!left.data)
+                {
+                    cout << "Error loading image." << endl;
+                    return -1;
+                }
+                cvtColor(left, left, COLOR_BGR2RGB);
                 break;
             case 'i':
                 image_path = (char *)malloc(strlen(optarg) + 1);
                 memcpy(image_path, optarg, strlen(optarg) + 1);
-                cout << image_path << endl;
+                //cout << image_path << endl;
                 img = imread(image_path, IMREAD_COLOR);
+                if (!left.data)
+                {
+                    cout << "Error loading image." << endl;
+                    return -1;
+                }
+
+                cvtColor(img, img, COLOR_BGR2RGB);
                 half_width = (int)img.size().width / 2;
                 left = img(Range(0, img.size().height), Range(0, half_width));
                 right = img(Range(0, img.size().height), Range(half_width, img.size().width));
@@ -87,8 +220,8 @@ int main(int argc, char **argv)
             case 'T':
                 M_l.row(0) << 0.299, 0.587, 0.114;
                 M_r.row(2) << 0.299, 0.587, 0.114;
-                cout << M_l << endl;
-                cout << M_r << endl;
+                //cout << M_l << endl;
+                //cout << M_r << endl;
                 break;
             case 'G':
                 M_l.row(0) << 0.299, 0.587, 0.114;
@@ -152,21 +285,15 @@ int main(int argc, char **argv)
             default:
                 cout << "Unknown option character " << endl;
                 //printf("invalid\n");
-                abort();
+                return -1;
         }
-    }
-    //if (!left.data)
-    if (!left.data || !right.data)
-    {
-        cout << "Error loading image" << endl;
-        return 0;
     }
 
     out = analy_gen(left, right, M_l, M_r);
+    cout << "out: " << out.size() << " " << out.channels() << endl;
 
-    imshow("left", left);
+    imwrite("analygraph.jpg", out * (1.0 / 255));
     imshow("out", out);
-
     waitKey(0);
     destroyAllWindows();
 
