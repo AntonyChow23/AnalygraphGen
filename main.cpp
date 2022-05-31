@@ -24,18 +24,17 @@ using namespace std;
 using namespace cv;
 using namespace Eigen;
 
-#define DIM 3
-#define MAX_THREAD 4
-double Ml[DIM][DIM];
-double Mr[DIM][DIM];
-
+//#define DIM 3
+//#define MAX_THREAD 4
+//double Ml[DIM][DIM];
+//double Mr[DIM][DIM];
 
 Mat analy_gen(const Mat &left_graph, const Mat &right_graph, Matrix3f M_l, Matrix3f M_r)
 {
     //Mat analygraph = 0.5*left + 0.5*right;
     //typedef Matrix<double, Dynamic, Dynamic> MatrixXd;
-    typedef Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> MatrixXd;
-    MatrixXd left_RGB, right_RGB, analy_RGB, A, B;
+    typedef Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic> MatrixXf;
+    MatrixXf left_RGB, right_RGB, analy_RGB, A, B;
     //typedef Matrix<double, 3, Dynamic> Eigen::Matrix3Xd
     //Matrix3Xd left_RGB, right_RGB, analy_RGB, A, B;
 
@@ -62,19 +61,23 @@ Mat analy_gen(const Mat &left_graph, const Mat &right_graph, Matrix3f M_l, Matri
     int n_channels = min(left.channels(), right.channels()); // assume two pictures have same channels
 
     cout << "left: " << left.size() << " " << left.channels() << endl;
-    Mat img = left.reshape(1,0);
-    cout << "img: " << img.size() << " " << img.channels() << endl;
+    left = left.reshape(1, 0);
+    //Mat img = left.reshape(1,0);
+    cout << "left: " << left.size() << " " << left.channels() << endl;
 
-    cv2eigen(img, left_RGB);
+    cv2eigen(left, left_RGB);
     //left_RGB.resize(3, 0); // assume 3 channels
+    //left_RGB.resize(3, left_RGB.cols() * left_RGB.rows() / 3); // assume 3 channels
+    cout << "left_RGB: " << left_RGB.rows() << " " << left_RGB.cols() << endl;
+    cout << left_RGB(0,seqN(0,10)) << endl;
     left_RGB.resize(3, left_RGB.cols() * left_RGB.rows() / 3); // assume 3 channels
 
     cout << "left_RGB: " << left_RGB.rows() << " " << left_RGB.cols() << endl;
 
     cout << "right: " << right.size() << " " << right.channels() << endl;
-    img = right.reshape(1,0);
-    cout << "img: " << img.size() << " " << img.channels() << endl;
-    cv2eigen(img, right_RGB);
+    right = right.reshape(1, 0);
+    cout << "right: " << right.size() << " " << right.channels() << endl;
+    cv2eigen(right, right_RGB);
     //right_RGB.resize(3, 0); // assume 3 channels
     right_RGB.resize(3, right_RGB.cols() * right_RGB.rows() / 3); // assume 3 channels
 
@@ -91,8 +94,11 @@ Mat analy_gen(const Mat &left_graph, const Mat &right_graph, Matrix3f M_l, Matri
     // destroyAllWindows();
     // cv2eigen(left_channels, left_RGB);
 
-    analy_RGB = A;
+    analy_RGB = A + B;
     //analy_RGB = A + B;
+    cout << "analy_RGB: " << analy_RGB.size() << endl;
+    analy_RGB.resize(Row, analy_RGB.size()/Row);
+    cout << analy_RGB(0, seqN(0, 20)) << endl;
     cout << "analy_RGB: " << analy_RGB.rows() << " " << analy_RGB.cols() << endl;
     //analy_RGB.resize(3, analy_RGB.cols() * analy_RGB.rows() / 3);
     eigen2cv(analy_RGB, analy_graph);
@@ -171,7 +177,7 @@ int main(int argc, char **argv)
             case 'l':
                 image_path = (char *)malloc(strlen(optarg) + 1);
                 memcpy(image_path, optarg, strlen(optarg) + 1);
-                //cout << image_path << endl;
+
                 left = imread(image_path, IMREAD_COLOR);
                 if (!left.data)
                 {
@@ -179,24 +185,25 @@ int main(int argc, char **argv)
                     return -1;
                 }
                 cvtColor(left, left, COLOR_BGR2RGB);
-                //left = imread(image_path, IMREAD_COLOR);
+
                 break;
             case 'r' :
                 image_path = (char *)malloc(strlen(optarg) + 1);
                 memcpy(image_path, optarg, strlen(optarg) + 1);
-                //cout << image_path << endl;
+
                 right = imread(image_path, IMREAD_COLOR);
                 if (!left.data)
                 {
                     cout << "Error loading image." << endl;
                     return -1;
                 }
+
                 cvtColor(left, left, COLOR_BGR2RGB);
                 break;
             case 'i':
                 image_path = (char *)malloc(strlen(optarg) + 1);
                 memcpy(image_path, optarg, strlen(optarg) + 1);
-                //cout << image_path << endl;
+
                 img = imread(image_path, IMREAD_COLOR);
                 if (!left.data)
                 {
@@ -208,7 +215,7 @@ int main(int argc, char **argv)
                 half_width = (int)img.size().width / 2;
                 left = img(Range(0, img.size().height), Range(0, half_width));
                 right = img(Range(0, img.size().height), Range(half_width, img.size().width));
-                //gen.mix = 0.5 * left + 0.5 * right;
+
                 break;
             /*
             case 'o':
@@ -217,74 +224,42 @@ int main(int argc, char **argv)
                 break;
             */
            
-            case 'T':
+            case 'T': // True analygraph
                 M_l.row(0) << 0.299, 0.587, 0.114;
                 M_r.row(2) << 0.299, 0.587, 0.114;
-                //cout << M_l << endl;
-                //cout << M_r << endl;
                 break;
-            case 'G':
+            case 'G': // Gray analygraph
                 M_l.row(0) << 0.299, 0.587, 0.114;
                 M_r.row(1) << 0.299, 0.587, 0.114;
                 M_r.row(2) << 0.299, 0.587, 0.114;
-                cout << M_l << endl;
-                cout << M_r << endl;
                 break;
-            case 'C':
+            
+            case 'C': // Color analygraph
                 M_l(0, 0) = 1;
                 M_r(1, 1) = 1;
                 M_r(2, 2) = 1;
-                cout << M_l << endl;
-                cout << M_r << endl;
                 break;
-            case 'H':
+            case 'H': // Half-color analygraph
                 M_l.row(0) << 0.299, 0.587, 0.114;
                 M_r(1, 1) = 1;
                 M_r(2, 2) = 1;
-                cout << M_l << endl;
-                cout << M_r << endl;
                 break;
-            case 'O':
+            case 'O': // 3DTV-optimized analygraph
                 M_l(0, 1) = 0.7;
                 M_l(0, 2) = 0.3;
                 M_r(1, 1) = 1;
                 M_r(2, 2) = 1;
-                cout << M_l << endl;
-                cout << M_r << endl;
                 break;
-            case 'D':
+            case 'D': // DuBois analygraph
                 M_l << 0.437, 0.449, 0.164, -0.062, -0.062, -0.024, -0.048, -0.050, -0.017;
                 M_r << -0.011, -0.032, -0.007, 0.377, 0.761, 0.009, -0.026, -0.093, 1.234;
-                cout << M_l << endl;
-                cout << M_r << endl;
                 break;
-            case 'R':
+            case 'R': // Roscolux analygraph
                 M_l << 0.3185, 0.0769, 0.0109, 0.1501, 0.0767, 0.0056, 0.0007, 0.0020, 0.0156;
                 M_r << 0.0174, 0.0484, 0.1402, 0.0184, 0.1807, 0.0458, 0.0286, 0.0991, 0.7662;
-                cout << M_l << endl;
-                cout << M_r << endl;
                 break;
-            
-            /*
-            case '?':
-                fprintf(stderr, "Unknown option character `\\x%x'.\n", opt);
-                
-                
-                if (optopt == 'c')
-                    fprintf(stderr, "Option -%c requires an argument.\n", optopt);
-                else if (isprint(optopt))
-                    fprintf(stderr, "Unknown option `-%c'.\n", optopt);
-                else
-                    fprintf(stderr,
-                            "Unknown option character `\\x%x'.\n",
-                            optopt);
-                return 1;
-                
-               break;
-               */
             default:
                 cout << "Unknown option character " << endl;
-                //printf("invalid\n");
                 return -1;
         }
     }
@@ -292,71 +267,9 @@ int main(int argc, char **argv)
     out = analy_gen(left, right, M_l, M_r);
     cout << "out: " << out.size() << " " << out.channels() << endl;
 
-    imwrite("analygraph.jpg", out * (1.0 / 255));
-    imshow("out", out);
+    imwrite("analygraph.jpg", out);
+    imshow("out", out / 255.0);
     waitKey(0);
     destroyAllWindows();
-
-    //waitKey(0);
-    //destroyAllWindows();
-
-    //cout << gen.left_path << endl;
-    //cout << gen.right_path << endl;
-    //cout << gen.in_path << endl;
-    //cout << gen.out_path << endl;
-    /*
-    //! [imread]
-    // std::string image_path = samples::findFile("lantern.jpeg");
-    std::string image_path = "images/lantern.jpeg";
-    std::cout << image_path;
-    Mat img = imread(image_path, IMREAD_COLOR);
-    // Mat img = imread("test.jpg");
-    cout << "Width : " << img.size().width << endl;
-    cout << "Height: " << img.size().height << endl;
-    cout << "Channels: :" << img.channels() << endl;
-
-    int half_width = (int)img.size().width / 2;
-    Mat another = img(Range(0, img.size().height), Range(0, img.size().width));
-    Mat left = img(Range(0, img.size().height), Range(0, half_width));
-    Mat right = img(Range(0, img.size().height), Range(half_width, img.size().width));
-    Mat mix = 0.5 * left + 0.5 * right;
-    // Mat cropped_image = img(Range(80, 280), Range(150, 330));
-    imshow(" Original Image", another);
-    imshow("Left", left);
-    imshow("Right", right);
-    imshow("Mix", mix);
-    // imwrite("left.jpg", left);
-    // imwrite("right.jpg", right);
-
-    // 0 means loop infinitely
-    waitKey(0);
-    destroyAllWindows();
-
-    
-    Mat img = imread(image_path, IMREAD_COLOR);
-    //! [imread]
-
-    //! [empty]
-    if (img.empty())
-    {
-        std::cout << "Could not read the image: " << image_path << std::endl;
-        return 1;
-    }
-    //! [empty]
-
-    //! [imshow]
-    imshow("Display window", img);
-    std::cout << img;
-    int k = waitKey(0); // Wait for a keystroke in the window
-    //! [imshow]
-
-    //! [imsave]
-    std::cout << k;
-    if (k == 's')
-    {
-        imwrite("starry_night.png", img);
-    }
-    //! [imsave]
-    */
     return 0;
 }
