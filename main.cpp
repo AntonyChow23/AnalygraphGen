@@ -1,3 +1,4 @@
+//<Junwei Zhou>
 #include <Eigen/Dense>
 #include <eigen3/Eigen/Dense>
 
@@ -16,10 +17,26 @@
 #include <unistd.h>
 #include <cstring>
 #include <cstdint>
+#include <pthread.h>
 
 using namespace std;
 using namespace cv;
 using namespace Eigen;
+
+#define MAX_THREAD 4
+#define MAX_ID 400
+
+Mat Analy;
+Matrix3f M_l;
+Matrix3f M_r;
+int Col_i;
+/*
+for multithreading
+void *multiply(void *arg)
+{
+
+}
+*/
 
 Mat analy_gen(const Mat &left_graph, const Mat &right_graph, Matrix3f M_l, Matrix3f M_r)
 {
@@ -68,8 +85,10 @@ int main(int argc, char **argv)
 
     Mat left, right, out, img;
 
-    Matrix3f M_l = Matrix3f::Zero();
-    Matrix3f M_r = Matrix3f::Zero();
+    M_l = Matrix3f::Zero();
+    M_r = Matrix3f::Zero();
+    //Matrix3f M_l = Matrix3f::Zero();
+    //Matrix3f M_r = Matrix3f::Zero();
 
     while ((opt = getopt(argc, argv, "l:r:i:TGCHODR")) != -1)
     {
