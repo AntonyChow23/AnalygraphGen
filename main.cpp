@@ -69,7 +69,7 @@ Mat analy_gen(const Mat &left_graph, const Mat &right_graph, Matrix3f M_l, Matri
     analy_RGB = A + B;
     analy_RGB.resize(Row, analy_RGB.size()/Row);
 
-    cout << analy_RGB(0, seqN(0, 20)) << endl;
+    //cout << analy_RGB(0, seqN(0, 20)) << endl;
 
     // convert matrix to mat
     eigen2cv(analy_RGB, analy_graph);
