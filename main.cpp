@@ -26,9 +26,12 @@ using namespace Eigen;
 #define MAX_THREAD 4
 #define MAX_ID 400
 
-Mat Analy, Left, Right, M_l, M_r;
-Mat A = (Mat_<float>(3, 3) << 1, 1, 1, 1, 1, 1, 1, 1, 1);
+Mat Analy, Left, Right;
+double M_l[3][3] = {{0.299, 0.587, 0.114}, {0, 0, 0}, {0, 0, 0}};
+double M_r[3][3] = {{0, 0, 0}, {0, 0, 0}, {0.299, 0.587, 0.114}};
+//Mat A = (Mat_<float>(3, 3) << 1, 1, 1, 1, 1, 1, 1, 1, 1);
 typedef Point3_<uint8_t> Pixel;
+int Col_i;
 
 //Matrix3f M_l << 1, 1, 1, 1, 1, 1, 1, 1, 1, 1;
 //int Col_i;
@@ -90,20 +93,222 @@ Mat analy_gen(const Mat &left_graph, const Mat &right_graph, Matrix3f M_l, Matri
     return analy_graph;
 }
 */
+void *multiply(void* arg)
+{
+    int i = Col_i +1;
+    Pixel pixel;
+    for (int j = 0; j < 3; j++)
+    {
+        for (int k = 0; k<3; k++)
+        {
+            pixel = M_l[j][k] * Left.at<Pixel>(k, j) + M_r[j][k] * Right.at<Pixel>(k, j);
+        }
+        // Pixel pixel = img1.at<Pixel>(0, j) * num.row(i).col(0) + img1.at<Pixel>(1, j) * num.row(i).col(1) + img1.at<Pixel>(2, j) * num.row(i).col(2);
+        Analy.at<Pixel>(j, i) = pixel;
+    }
+}
 int main(int argc, char **argv)
 {
     int opt;
     int half_width = 0;
     char *image_path = NULL;
-    int i,j;
+    int row, col;
 
-    double number[3] = {0.5, 0.5, 0.5};
+    //double number[3] = {0.5, 0.5, 0.5};
 
-    //Mat left, right, out, img;
+    Mat left, right;
     Mat img, img1, img3;
+    Mat channels[3];
+    Mat r,g,b;
 
+
+    left = imread("images/left.jpg", IMREAD_COLOR);
+    cout << left.size() << endl;
+    cvtColor(left, left, COLOR_BGR2RGB);
+    right = imread("images/right.jpg", IMREAD_COLOR);
+    cvtColor(right, right, COLOR_BGR2RGB);
+
+    row = min(right.rows, left.rows);
+    col = min(right.cols, left.cols);
+
+    left = left(Range(0, row), Range(0, col));
+    right = right(Range(0, row), Range(0, col));
+
+    //Left = Mat::zeros(3, row*col, CV_8UC3);
+    //Right = Mat::zeros(3, row*col, CV_8UC3);
+    Analy = Mat::zeros(left.size(), CV_8UC3);
+
+    /*cout << "left: " << left.size() << " " << left.channels() << endl;
+    for (int i = 0; i < 3; i++)
+    {
+        for (int j = 0; j<10; j++)
+            cout <<  left.row(i).col(j) << " ";
+        cout << endl;
+    }*/
+    //Mat img2[3];
+
+    //left = left.reshape(1,0);
+    split(left, channels);
+    r = channels[0].reshape(1, left.rows * left.cols);
+    g = channels[1].reshape(1, left.rows * left.cols);
+    b = channels[2].reshape(1, left.rows * left.cols);
+    hconcat(r, g, Left);
+    hconcat(Left, b, Left);
+
+    split(right, channels);
+    r = channels[0].reshape(1, right.rows * right.cols);
+    g = channels[1].reshape(1, right.rows * right.cols);
+    b = channels[2].reshape(1, right.rows * right.cols);
+    hconcat(r, g, Right);
+    hconcat(Right, b, Right);
+
+    Mat RGB = Mat::zeros(Left.size(), CV_8UC1);
+    cout << RGB.size() << " " << RGB.channels() << endl;
+    cout << RGB.rows << " " << RGB.cols << endl;
+
+    Pixel pixel;
+
+    for (int k = 0; k < RGB.rows; k++)
+    {
+        for (int i = 0; i < 3; i++)
+        {
+            for (int j = 0; j < 3; j++)
+            {
+            pixel = M_l[i][j] * Left.at<Pixel>(k, j) + M_r[i][j] * Right.at<Pixel>(k, j);
+            }
+        // Pixel pixel = img1.at<Pixel>(0, j) * num.row(i).col(0) + img1.at<Pixel>(1, j) * num.row(i).col(1) + img1.at<Pixel>(2, j) * num.row(i).col(2);
+            RGB.at<Pixel>(k, i) = pixel;
+        }
+    }
+
+    for (int i = 0; i < 3; i++) {
+        for (int j = 0; j < 10; j++) {
+            cout << RGB.col(i).row(j) << " ";
+        }
+        cout << endl;
+    }
+    
+    Mat R(Analy.size(), CV_8UC1);
+    Mat G(Analy.size(), CV_8UC1);
+    Mat B(Analy.size(), CV_8UC1);
+
+    channels[0] = r.reshape(1, row);
+    channels[1] = g.reshape(1, row);
+    channels[2] = b.reshape(1, row);
+
+    RGB.col(0).copyTo(r);
+    R= r.reshape(1, row);
+    RGB.col(1).copyTo(g);
+    G = g.reshape(1, row);
+    RGB.col(2).copyTo(b);
+    B = b.reshape(1, row);
+    //merge(channels, Analy);
+    //merge(R, G, B, Analy);
+    //Mat G(Left.size(), CV_8UC1);
+    //Mat B(Left.size(), CV_8UC1);
+    //R = RGB.col(0);
+    //cout << RGB.rows<< " " << RGB.cols << endl;
+    //RGB.col(0).copyTo(r);
+    //RGB.col(0).copyTo(r);
+    //cout << "r: " << r.rows << " " << r.cols << endl;
+    //cout << "Left: " << Left.size() << " " << Left.rows << " " << Left.cols << " " << Left.channels() << endl;
+
+    //R = r.reshape(1, row);
+    //cout << r.isContinuous() << " " << R.isContinuous() << endl;
+    //cout << "r: " << r.size() << " " << r.channels() << endl;
+    //Mat R = r.reshape(Left.rows, Left.cols);
+    //cout << "r: " << r.size() << " " << r.channels() << endl;
+    merge(channels, 3, Analy);
+    cout << Analy.size() << endl;
+
+
+        for (int j = 0; j < 10; j++)
+        {
+            cout << Analy.col(0).row(j) << " ";
+        }
+        cout << endl;
+
+
+    //r = R.reshape(Left.rows, Left.cols);
+    //cout << "r: " << r.size() << " " << r.channels() << endl;
+    // Mat R = r.reshape(Left.size());
+    // g = RGB.col(1);
+    // Mat G = g.reshape(Left.size());
+    // b = RGB.col(2);
+    // Mat B = b.reshape(Left.size());
+    // cout << "R: " << R.size() << " " << R.channels() << endl;
+    
+    /*
+    pthread_t threads[MAX_THREAD];
+
+    // Creating four threads, each evaluating its own part
+    for (i = 0; i < MAX_THREAD; i++)
+    {
+        int *p;
+        pthread_create(&threads[i], NULL, multiply, (void *)(p));
+    }
+
+    // joining and waiting for all threads to complete
+    for (i = 0; i < MAX_THREAD; i++)
+        pthread_join(threads[i], NULL);
+    */
+
+    //imshow("R", R);
+    //imshow("G", G);
+    //imshow("B", B);
+    cvtColor(Analy, Analy, COLOR_RGB2BGRA);
+    imshow("Analygraph", Analy / 255.0);
+    imwrite("Analygraph.jpg", Analy);
+    waitKey(0);
+    destroyAllWindows();
+    
+    return 0;
+
+    //hconcat(left_ch[0], left_ch[1], Left);
+    //hconcat(Left, left_ch[2], Left);
+    
+    /*cout << "Left: " << Left.size() << " " << Left.channels() << endl;
+    for (i = 0; i < 3; i++)
+    {
+        for (j = 0; j < 10; j++)
+            cout << Left.col(i).row(j) << " ";
+        cout << endl;
+    }*/
+    //split(right, right_ch);
+    //hconcat(right_ch[0], right_ch[1], Right);
+   // hconcat(Right, right_ch[2], Right);
+    
+    
+    // cout << "img2: " << img2.size() << " " << img2.channels() << endl;
+    //Mat A = img2[0];
+    //Mat B = img2[1];
+    //Mat C = img2[2];
+    //hconcat(A, B, img3);
+    //hconcat(img3, C, img3);
+    /*&
     img = imread("images/pic.jpg", IMREAD_COLOR);
-
+    cout << "img: " << img.size() << " " << img.channels() << endl;
+    for (i = 0; i < 10; i++)
+    {
+        cout << img.row(0).col(i) << " ";
+    }
+    cout << endl;
+    Mat img2[3];
+    split(img, img2);
+    // cout << "img2: " << img2.size() << " " << img2.channels() << endl;
+    Mat A = img2[0];
+    Mat B = img2[1];
+    Mat C = img2[2];
+    hconcat(A, B, img3);
+    hconcat(img3, C, img3);
+    cout << "img3: " << img3.size() << " " << img3.channels() << endl;
+    for (i = 0; i < 10; i++)
+    {
+        cout << img3.row(0).col(i) << " ";
+    }
+    cout << endl;
+    */
+    /*
     cout << "img: " << img.size() << " " << img.channels() << endl;
     for (int i = 0; i < 10; i++)
     {
@@ -154,9 +359,10 @@ int main(int argc, char **argv)
             num2.at<Pixel>(i,j) = pixel;
         }
     }
-    imshow("num2", num2);
-    waitKey(0);
-    destroyAllWindows();
+    */
+    //imshow("Analygraph", Analy);
+    //waitKey(0);
+    //destroyAllWindows();
     //Mat num1 = num * img1;
 
     //Mat num2;
@@ -311,5 +517,5 @@ int main(int argc, char **argv)
     destroyAllWindows();
 
     */
-    return 0;
+    //return 0;
 }
