@@ -61,3 +61,11 @@ Eigen:
 https://stackoverflow.com/questions/23284473/fatal-error-eigen-dense-no-such-file-or-directory
 
 https://stackoverflow.com/questions/54971083/how-to-use-cvmat-and-eigenmatrix-correctly-opencv-eigen
+
+https://docs.opencv.org/2.4/modules/core/doc/basic_structures.html#mat-create
+
+https://man7.org/linux/man-pages/man3/pthread_create.3.html
+
+https://courses.engr.illinois.edu/cs241/fa2010/ppt/10-pthread-examples.pdf
+
+https://www.geeksforgeeks.org/measure-execution-time-function-cpp/
