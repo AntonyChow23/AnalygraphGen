@@ -24,7 +24,7 @@ using namespace std;
 using namespace cv;
 using namespace Eigen;
 
-#define MAX_THREAD 4
+#define MAX_THREAD 400
 #define MAX_ID 400
 
 Mat Analy, Left, Right, RGB;
@@ -109,6 +109,9 @@ void *multiply(void* arg)
     thargs_t *thargs = (thargs_t*)arg;
     if (thargs == NULL)
         pthread_exit(NULL);
+    //int *args = (int*)arg;
+    //if (args == NULL)
+    //    pthread_exit(NULL);
     //long n = (long)arg;
     //int start = n*Step;
     //int end = min(End, (n+1)*Step);
@@ -116,6 +119,7 @@ void *multiply(void* arg)
     //for (int k = start; k < end; k++)
     //mu.lock();
     for (int k = thargs->start; k < thargs->end; k++)
+    //for (int k = args[0]; k < args[1]; k++)
     {
         for (int i = 0; i < 3; i++)
         {
@@ -126,6 +130,7 @@ void *multiply(void* arg)
     //mu.unlock();
     //cout << "threads" <<endl;
     //mu.lock();
+    //cout << args[0] << "->" << args[1] << endl;
     //cout << thargs->start << " " << thargs->end << endl;
     //mu.unlock();
     pthread_exit(NULL);
@@ -210,7 +215,8 @@ int main(int argc, char **argv)
             break;
 
         case 'C': // Color analygraph
-            M_l[0][0] = 1; M_r[1][1] = 1; M_r[2][2] = 1;
+            M_l[0][0] = 1;
+            M_r[1][1] = 1; M_r[2][2] = 1;
             break;
         case 'H': // Half-color analygraph
             M_l[0][0] = 0.299; M_l[0][1] = 0.587; M_l[0][2] = 0.114;
@@ -293,25 +299,30 @@ int main(int argc, char **argv)
     RGB = Mat::zeros(Left.size(), CV_8UC1);
 
     pthread_t threads[MAX_THREAD];
-    thargs_t *thargs = (thargs_t*)malloc(sizeof(thargs_t));
+    thargs_t thargs[MAX_THREAD];
+    //thargs_t *thargs = (thargs_t*)malloc(sizeof(thargs_t));
     //End = min(Left.rows, MAX_THREAD);
     //Step = max((int)Left.rows / End, 1);
     int End = min(Left.rows, MAX_THREAD);
     int step = max((int)Left.rows / End, 1);
 
-    cout << Left.rows << " " << End << " " << step << endl;
+    //cout << Left.rows << " " << End << " " << step << endl;
 
     pthread_attr_t attr;
     pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+    int args[2] = {0,0};
 
     for (int i = 0; i < End; i++)
     {
-        thargs->start = i*step;
-        thargs->end = min((i+1)*step, Left.rows);
+        thargs[i].start = i*step;
+        thargs[i].end = min((i+1)*step, Left.rows);
+        //args[0] = i*step;
+        //args[1] = min((i + 1) * step, Left.rows);
         //if (pthread_create(&threads[i], NULL, multiply, &i) != 0)
         //if (pthread_create(&threads[i], NULL, multiply, (void*)thargs)!=0)
-        if (pthread_create(&threads[i], NULL, multiply, (void *)thargs) != 0)
+        if (pthread_create(&threads[i], NULL, multiply, (void *)&thargs[i]) != 0)
+        //if (pthread_create(&threads[i], NULL, multiply, (void *)args) != 0)
         {
             cout << "Error creating threads" << endl;
             return -1;
@@ -368,7 +379,7 @@ int main(int argc, char **argv)
             //RGB.at<Pixel>(k, i) = left_pixel + right_pixel;
         }
     }*/
-
+    /*
     for (int i = 0; i < 10; i++)
     {
         for (int j = 0; j < RGB.cols; j++)
@@ -376,7 +387,7 @@ int main(int argc, char **argv)
             cout << RGB.row(i).col(j) << " ";
         }
         cout << endl;
-    }
+    }*/
     //Mat R(Analy.size(), CV_8UC1);
     //Mat G(Analy.size(), CV_8UC1);
     //Mat B(Analy.size(), CV_8UC1);
@@ -411,7 +422,7 @@ int main(int argc, char **argv)
     //Mat R = r.reshape(Left.rows, Left.cols);
     //cout << "r: " << r.size() << " " << r.channels() << endl;
     merge(channels, 3, Analy);
-    cout << "Analy:" << Analy.size() << " " << Analy.channels() << endl;
+    //cout << "Analy:" << Analy.size() << " " << Analy.channels() << endl;
 
 
     //r = R.reshape(Left.rows, Left.cols);
