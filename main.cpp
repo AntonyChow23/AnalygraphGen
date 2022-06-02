@@ -18,6 +18,7 @@
 #include <cstring>
 #include <cstdint>
 #include <pthread.h>
+#include <mutex>
 
 using namespace std;
 using namespace cv;
@@ -26,20 +27,22 @@ using namespace Eigen;
 #define MAX_THREAD 4
 #define MAX_ID 400
 
-Mat Analy, Left, Right;
-double M_l[3][3] = {{0.299, 0.587, 0.114}, {0, 0, 0}, {0, 0, 0}};
-//double M_l[3][3] = {{1, 0, 0}, {0, 0, 0}, {0, 0, 0}};
-double M_r[3][3] = {{0, 0, 0}, {0, 0, 0}, {0.299, 0.587, 0.114}};
-//double M_r[3][3] = {{0, 0, 0}, {0, 0, 0}, {0, 0, 0}};
+Mat Analy, Left, Right, RGB;
+//double M_l[3][3] = {{0.299, 0.587, 0.114}, {0, 0, 0}, {0, 0, 0}};
+double M_l[3][3] = {{0, 0, 0}, {0, 0, 0}, {0, 0, 0}};
+//double M_r[3][3] = {{0, 0, 0}, {0, 0, 0}, {0.299, 0.587, 0.114}};
+double M_r[3][3] = {{0, 0, 0}, {0, 0, 0}, {0, 0, 0}};
 //Mat A = (Mat_<float>(3, 3) << 1, 1, 1, 1, 1, 1, 1, 1, 1);
 typedef Point3_<uint8_t> Pixel;
-int Col_i;
+mutex mu;
+//int Step, End;
 
 //Matrix3f M_l << 1, 1, 1, 1, 1, 1, 1, 1, 1, 1;
 //int Col_i;
 
 //Mat M_l(3,3,double);
 //Mat M_r = (Mat_<double>(3, 3) << 0, 0, 0, 0, 0, 0, 0, 0, 0);
+
 
 
 //double M_l[3][3] = {{0,0,0}};
@@ -95,19 +98,38 @@ Mat analy_gen(const Mat &left_graph, const Mat &right_graph, Matrix3f M_l, Matri
     return analy_graph;
 }
 */
+typedef struct thread_args
+{
+    int start;
+    int end;
+} thargs_t;
+
 void *multiply(void* arg)
 {
-    int i = Col_i +1;
-    Pixel pixel;
-    for (int j = 0; j < 3; j++)
+    thargs_t *thargs = (thargs_t*)arg;
+    if (thargs == NULL)
+        pthread_exit(NULL);
+    //long n = (long)arg;
+    //int start = n*Step;
+    //int end = min(End, (n+1)*Step);
+    //cout << n << endl;
+    //for (int k = start; k < end; k++)
+    //mu.lock();
+    for (int k = thargs->start; k < thargs->end; k++)
     {
-        for (int k = 0; k<3; k++)
+        for (int i = 0; i < 3; i++)
         {
-            pixel = M_l[j][k] * Left.at<Pixel>(k, j) + M_r[j][k] * Right.at<Pixel>(k, j);
+            RGB.row(k).col(i) = M_l[i][0] * Left.row(k).col(0) + M_l[i][1] * Left.row(k).col(1) + M_l[i][2] * Left.row(k).col(2);
+            RGB.row(k).col(i) += M_r[i][0] * Right.row(k).col(0) + M_r[i][1] * Right.row(k).col(1) + M_r[i][2] * Right.row(k).col(2);
         }
-        // Pixel pixel = img1.at<Pixel>(0, j) * num.row(i).col(0) + img1.at<Pixel>(1, j) * num.row(i).col(1) + img1.at<Pixel>(2, j) * num.row(i).col(2);
-        Analy.at<Pixel>(j, i) = pixel;
     }
+    //mu.unlock();
+    //cout << "threads" <<endl;
+    //mu.lock();
+    //cout << thargs->start << " " << thargs->end << endl;
+    //mu.unlock();
+    pthread_exit(NULL);
+    return NULL;
 }
 int main(int argc, char **argv)
 {
@@ -123,24 +145,123 @@ int main(int argc, char **argv)
     Mat channels[3];
     Mat r,g,b;
 
-    left = imread("images/left.jpg", IMREAD_COLOR);
-    //cout << left.size() << " " << left.rows << " " << left.cols << endl;
+
+    while ((opt = getopt(argc, argv, "l:r:i:TGCHODR")) != -1)
+    {
+        switch (opt)
+        {
+        case 'l':
+            image_path = (char *)malloc(strlen(optarg) + 1);
+            memcpy(image_path, optarg, strlen(optarg) + 1);
+
+            left = imread(image_path, IMREAD_COLOR);
+            if (!left.data)
+            {
+                cout << "Error loading image." << endl;
+                return -1;
+            }
+
+            cvtColor(left, left, COLOR_BGR2RGB);
+            break;
+        case 'r':
+            image_path = (char *)malloc(strlen(optarg) + 1);
+            memcpy(image_path, optarg, strlen(optarg) + 1);
+
+            right = imread(image_path, IMREAD_COLOR);
+            if (!right.data)
+            {
+                cout << "Error loading image." << endl;
+                return -1;
+            }
+
+            cvtColor(right, right, COLOR_BGR2RGB);
+            break;
+        case 'i':
+            image_path = (char *)malloc(strlen(optarg) + 1);
+            memcpy(image_path, optarg, strlen(optarg) + 1);
+
+            img = imread(image_path, IMREAD_COLOR);
+            if (!img.data)
+            {
+                cout << "Error loading image." << endl;
+                return -1;
+            }
+
+            cvtColor(img, img, COLOR_BGR2RGB);
+            half_width = (int)img.size().width / 2;
+            left = img(Range(0, img.size().height), Range(0, half_width));
+            right = img(Range(0, img.size().height), Range(half_width, img.size().width));
+
+            break;
+
+        case 'T': // True analygraph
+            M_l[0][0] = 0.299; M_l[0][1] = 0.587; M_l[0][2] = 0.114;
+            M_r[2][0] = 0.299; M_r[2][1] = 0.587; M_r[2][2] = 0.114;
+            //(Mat_<double>(3, 3) << 0, 0, 0, 0, 0, 0, 0, 0, 0);
+            // M_l.row(0) << 0.299, 0.587, 0.114;
+            // M_l.row(0) = {0.299, 0.587, 0.114};
+            // M_r.row(2) = (Mat_<double>(1, 3) << 0.299, 0.587, 0.114);
+            break;
+
+        case 'G': // Gray analygraph
+            M_l[0][0] = 0.299; M_l[0][1] = 0.587; M_l[0][2] = 0.114;
+            M_r[1][0] = 0.299; M_r[1][1] = 0.587; M_r[1][2] = 0.114;
+            M_r[2][0] = 0.299; M_r[2][1] = 0.587; M_r[2][2] = 0.114;
+            break;
+
+        case 'C': // Color analygraph
+            M_l[0][0] = 1; M_r[1][1] = 1; M_r[2][2] = 1;
+            break;
+        case 'H': // Half-color analygraph
+            M_l[0][0] = 0.299; M_l[0][1] = 0.587; M_l[0][2] = 0.114;
+            M_r[1][1] = 1; M_r[2][2] = 1;
+            break;
+        case 'O': // 3DTV-optimized analygraph
+            M_l[0][1] = 0.7; M_l[0][2] = 0.3;
+            M_r[1][1] = 1; M_r[2][2] = 1;
+            break;
+        case 'D': // DuBois analygraph
+            M_l[0][0] = 0.437; M_l[0][1] = 0.449; M_l[0][2] = 0.164;
+            M_l[1][0] = -0.062; M_l[1][1] = -0.062; M_l[1][2] = -0.024;
+            M_l[2][0] = -0.048; M_l[2][1] = -0.050; M_l[2][2] = -0.017;
+
+            M_r[0][0] = -0.011; M_r[0][1] = -0.032; M_r[0][2] = -0.007;
+            M_r[1][0] = 0.377; M_r[1][1] = 0.761; M_r[1][2] = 0.009;
+            M_r[2][0] = -0.026; M_r[2][1] = -0.093; M_r[2][2] = 1.234;
+            break;
+        case 'R': // Roscolux analygraph
+            M_l[0][0] = 0.3185; M_l[0][1] = 0.0769; M_l[0][2] = 0.0109;
+            M_l[1][0] = 0.1501; M_l[1][1] = 0.0767; M_l[1][2] = 0.0056;
+            M_l[2][0] = 0.007; M_l[2][1] = 0.0020; M_l[2][2] = 0.0156;
+
+            M_r[0][0] = 0.0174; M_r[0][1] = 0.0484; M_r[0][2] = 0.1402;
+            M_r[1][0] = 0.0184; M_r[1][1] = 0.1807; M_r[1][2] = 0.0458;
+            M_r[2][0] = 0.0286; M_r[2][1] = 0.0991; M_r[2][2] = 0.7662;
+            break;
+
+        default:
+            cout << "Unknown option character " << endl;
+            return -1;
+        }
+    }
+
+    //left = imread("images/left.jpg", IMREAD_COLOR);
+    //cout << "left: " << left.size() << " " << left.rows << " " << left.cols << endl;
+    //cout << "right: " << right.size() << " " << right.rows << " " << right.cols << endl;
     //left = imread("images/left.jpg", IMREAD_COLOR);
     //cout << left.size() << endl;
-    cvtColor(left, left, COLOR_BGR2RGB);
+    //cvtColor(left, left, COLOR_BGR2RGB);
 
 
-    
 
-    right = imread("images/right.jpg", IMREAD_COLOR);
+
+    //right = imread("images/right.jpg", IMREAD_COLOR);
     //cout << right.size() << " " << right.rows << " " << right.cols << endl;
     //right = imread("images/right.jpg", IMREAD_COLOR);
-    cvtColor(right, right, COLOR_BGR2RGB);
+    //cvtColor(right, right, COLOR_BGR2RGB);
 
     row = min(right.rows, left.rows);
     col = min(right.cols, left.cols);
-    //row = 9;
-    //col = 9;
 
     left = left(Range(0, row), Range(0, col));
     right = right(Range(0, row), Range(0, col));
@@ -151,25 +272,10 @@ int main(int argc, char **argv)
     //Right = Mat::zeros(3, row*col, CV_8UC3);
     Analy = Mat::zeros(left.size(), CV_8UC3);
 
-    /*cout << "left: " << left.size() << " " << left.channels() << endl;
-    for (int i = 0; i < row; i++)
-    {
-        for (int j = 0; j<col; j++)
-            cout <<  left.row(i).col(j) << " ";
-        cout << endl;
-    }*/
-
-    /*cout << "right: " << right.size() << " " << right.channels() << endl;
-    for (int i = 0; i < row; i++)
-    {
-        for (int j = 0; j < col; j++)
-            cout << right.row(i).col(j) << " ";
-        cout << endl;
-    }*/
     //Mat img2[3];
 
     //left = left.reshape(1,0);
-    
+
     split(left, channels);
     r = channels[0].reshape(1, left.rows * left.cols);
     g = channels[1].reshape(1, left.rows * left.cols);
@@ -177,22 +283,6 @@ int main(int argc, char **argv)
     hconcat(r, g, Left);
     hconcat(Left, b, Left);
 
-    /*cout << "Left: " << left.size() << " " << left.channels() << endl;
-    for (int i = 0; i < Left.rows; i++)
-    {
-        for (int j = 0; j < Left.cols; j++)
-            cout << Left.row(i).col(j) << " ";
-        cout << endl;
-    }
-
-    for (int i = 0; i < 3; i++)
-    {
-        for (int j = 0; j < 3; j++)
-        {
-            cout << M_l[i][j] << " ";
-        }
-        cout << endl;
-    }*/
 
     split(right, channels);
     r = channels[0].reshape(1, right.rows * right.cols);
@@ -200,13 +290,60 @@ int main(int argc, char **argv)
     b = channels[2].reshape(1, right.rows * right.cols);
     hconcat(r, g, Right);
     hconcat(Right, b, Right);
+    RGB = Mat::zeros(Left.size(), CV_8UC1);
 
-    Mat RGB = Mat::zeros(Left.size(), CV_8UC1);
+    pthread_t threads[MAX_THREAD];
+    thargs_t *thargs = (thargs_t*)malloc(sizeof(thargs_t));
+    //End = min(Left.rows, MAX_THREAD);
+    //Step = max((int)Left.rows / End, 1);
+    int End = min(Left.rows, MAX_THREAD);
+    int step = max((int)Left.rows / End, 1);
+
+    cout << Left.rows << " " << End << " " << step << endl;
+
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+
+    for (int i = 0; i < End; i++)
+    {
+        thargs->start = i*step;
+        thargs->end = min((i+1)*step, Left.rows);
+        //if (pthread_create(&threads[i], NULL, multiply, &i) != 0)
+        //if (pthread_create(&threads[i], NULL, multiply, (void*)thargs)!=0)
+        if (pthread_create(&threads[i], NULL, multiply, (void *)thargs) != 0)
+        {
+            cout << "Error creating threads" << endl;
+            return -1;
+        }
+        //cout << "i: " << i << endl;
+        //cout << "i: " << i << " " << thargs->start << "->" << thargs->end << endl;
+    }
+
+    // Creating four threads, each evaluating its own part
+    //for (int i = 0; i < MAX_THREAD; i++)
+    //{
+    //    int *p;
+    //    pthread_create(&threads[i], NULL, multiply, i, i+7);
+    //}
+
+    // joining and waiting for all threads to complete
+    for (int i = 0; i < End; i++)
+    {
+        if (pthread_join(threads[i], NULL) != 0)
+        {
+            cout << "Error joining threads" << endl;
+            return -1;
+        }
+    }
 
 
-    Pixel left_pixel, right_pixel;
+    //pthread_exit(NULL);
+    //Mat RGB = Mat::zeros(Left.size(), CV_8UC1);
 
-    for (int k = 0; k < RGB.rows; k++)
+    //Pixel left_pixel, right_pixel;
+
+    /*for (int k = 0; k < RGB.rows; k++)
     {
         for (int i = 0; i < 3; i++)
         {
@@ -230,31 +367,33 @@ int main(int argc, char **argv)
             //RGB.at<Pixel>(k, i) = left_pixel;
             //RGB.at<Pixel>(k, i) = left_pixel + right_pixel;
         }
-    }
-    /*
-    cout << Left.at<Pixel>(1, 3) << endl;
-    cout << "RGB:" << RGB.size() << " " << RGB.channels() << endl;
-    for (int i = 0; i < RGB.rows; i++) {
-        for (int j = 0; j < RGB.cols; j++) {
+    }*/
+
+    for (int i = 0; i < 10; i++)
+    {
+        for (int j = 0; j < RGB.cols; j++)
+        {
             cout << RGB.row(i).col(j) << " ";
         }
         cout << endl;
-    }*/
-    
-    Mat R(Analy.size(), CV_8UC1);
-    Mat G(Analy.size(), CV_8UC1);
-    Mat B(Analy.size(), CV_8UC1);
+    }
+    //Mat R(Analy.size(), CV_8UC1);
+    //Mat G(Analy.size(), CV_8UC1);
+    //Mat B(Analy.size(), CV_8UC1);
+    RGB.col(0).copyTo(r);
+    RGB.col(1).copyTo(g);
+    RGB.col(2).copyTo(b);
 
     channels[0] = r.reshape(1, row);
     channels[1] = g.reshape(1, row);
     channels[2] = b.reshape(1, row);
 
-    RGB.col(0).copyTo(r);
-    R= r.reshape(1, row);
-    RGB.col(1).copyTo(g);
-    G = g.reshape(1, row);
-    RGB.col(2).copyTo(b);
-    B = b.reshape(1, row);
+    //RGB.col(0).copyTo(r);
+    //R= r.reshape(1, row);
+    //RGB.col(1).copyTo(g);
+    //G = g.reshape(1, row);
+    //RGB.col(2).copyTo(b);
+    //B = b.reshape(1, row);
     //merge(channels, Analy);
     //merge(R, G, B, Analy);
     //Mat G(Left.size(), CV_8UC1);
@@ -273,14 +412,7 @@ int main(int argc, char **argv)
     //cout << "r: " << r.size() << " " << r.channels() << endl;
     merge(channels, 3, Analy);
     cout << "Analy:" << Analy.size() << " " << Analy.channels() << endl;
-    /*for (int i = 0; i < Analy.rows; i++)
-    {
-        for (int j = 0; j < Analy.cols; j++)
-        {
-            cout << Analy.row(i).col(j) << " ";
-        }
-        cout << endl;
-    }*/
+
 
     //r = R.reshape(Left.rows, Left.cols);
     //cout << "r: " << r.size() << " " << r.channels() << endl;
@@ -290,7 +422,7 @@ int main(int argc, char **argv)
     // b = RGB.col(2);
     // Mat B = b.reshape(Left.size());
     // cout << "R: " << R.size() << " " << R.channels() << endl;
-    
+
     /*
     pthread_t threads[MAX_THREAD];
 
@@ -311,7 +443,7 @@ int main(int argc, char **argv)
     //imshow("B", B);
     cvtColor(Analy, Analy, COLOR_RGB2BGRA);
     imshow("Analygraph", Analy);
-    imwrite("Analygraph.jpg", Analy);
+    //imwrite("Analygraph.jpg", Analy);
     waitKey(0);
     destroyAllWindows();
     
@@ -456,109 +588,9 @@ int main(int argc, char **argv)
     //Matrix3f M_r = Matrix3f::Zero();
 
     //M_l = {}
-    /*
-    while ((opt = getopt(argc, argv, "l:r:i:TGCHODR")) != -1)
-    {
-        switch (opt)
-        {
-            case 'l':
-                image_path = (char *)malloc(strlen(optarg) + 1);
-                memcpy(image_path, optarg, strlen(optarg) + 1);
+    
 
-                left = imread(image_path, IMREAD_COLOR);
-                if (!left.data)
-                {
-                    cout << "Error loading image." << endl;
-                    return -1;
-                }
-
-                Mat B[3];
-                split(left, B);
-                Mat D = B.mul(C);
-                //float C = A.col(0)*B[0];
-
-                cvtColor(left, left, COLOR_BGR2RGB);
-
-                break;
-            case 'r' :
-                image_path = (char *)malloc(strlen(optarg) + 1);
-                memcpy(image_path, optarg, strlen(optarg) + 1);
-
-                right = imread(image_path, IMREAD_COLOR);
-                if (!right.data)
-                {
-                    cout << "Error loading image." << endl;
-                    return -1;
-                }
-
-                cvtColor(right, right, COLOR_BGR2RGB);
-                break;
-            case 'i':
-                image_path = (char *)malloc(strlen(optarg) + 1);
-                memcpy(image_path, optarg, strlen(optarg) + 1);
-
-                img = imread(image_path, IMREAD_COLOR);
-                if (!img.data)
-                {
-                    cout << "Error loading image." << endl;
-                    return -1;
-                }
-
-                cvtColor(img, img, COLOR_BGR2RGB);
-                half_width = (int)img.size().width / 2;
-                left = img(Range(0, img.size().height), Range(0, half_width));
-                right = img(Range(0, img.size().height), Range(half_width, img.size().width));
-
-                break;
-            
-            case 'T': // True analygraph
-                //(Mat_<double>(3, 3) << 0, 0, 0, 0, 0, 0, 0, 0, 0);
-                //M_l.row(0) << 0.299, 0.587, 0.114;
-                //M_l.row(0) = {0.299, 0.587, 0.114};
-                //M_r.row(2) = (Mat_<double>(1, 3) << 0.299, 0.587, 0.114);
-
-                cout << M_l << endl;
-                cout << M_r << endl;
-
-                break;
-            
-            case 'G': // Gray analygraph
-                M_l.row(0) << 0.299, 0.587, 0.114;
-                M_r.row(1) << 0.299, 0.587, 0.114;
-                M_r.row(2) << 0.299, 0.587, 0.114;
-                break;
-            
-            case 'C': // Color analygraph
-                M_l(0, 0) = 1;
-                M_r(1, 1) = 1;
-                M_r(2, 2) = 1;
-                break;
-            case 'H': // Half-color analygraph
-                M_l.row(0) << 0.299, 0.587, 0.114;
-                M_r(1, 1) = 1;
-                M_r(2, 2) = 1;
-                break;
-            case 'O': // 3DTV-optimized analygraph
-                M_l(0, 1) = 0.7;
-                M_l(0, 2) = 0.3;
-                M_r(1, 1) = 1;
-                M_r(2, 2) = 1;
-                break;
-            case 'D': // DuBois analygraph
-                M_l << 0.437, 0.449, 0.164, -0.062, -0.062, -0.024, -0.048, -0.050, -0.017;
-                M_r << -0.011, -0.032, -0.007, 0.377, 0.761, 0.009, -0.026, -0.093, 1.234;
-                break;
-            case 'R': // Roscolux analygraph
-                M_l << 0.3185, 0.0769, 0.0109, 0.1501, 0.0767, 0.0056, 0.0007, 0.0020, 0.0156;
-                M_r << 0.0174, 0.0484, 0.1402, 0.0184, 0.1807, 0.0458, 0.0286, 0.0991, 0.7662;
-                break;
-            
-            default:
-                cout << "Unknown option character " << endl;
-                return -1;
-        }
-    }
-    */
+    
     //out = analy_gen(left, right, M_l, M_r);
     /*
     imshow("RGB", out / 255.0);
